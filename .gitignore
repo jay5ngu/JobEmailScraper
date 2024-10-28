@@ -1,6 +1,7 @@
 # Jayson's Files
 credentials.json
 token.json
+emailHTML
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
