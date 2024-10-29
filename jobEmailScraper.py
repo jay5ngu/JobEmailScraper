@@ -5,9 +5,14 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-import json
 import base64
 from bs4 import BeautifulSoup 
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import firestore
+
+# Use a service account.
+fireCred = credentials.Certificate('firestoreCredentials.json')
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
@@ -15,6 +20,10 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 class JobEmailScraper:
     def __init__(self):
         self.credentials = self.checkCredentials()
+
+        # Firestore Application Default credentials are automatically created.
+        self.app = firebase_admin.initialize_app(fireCred)
+        self.db = firestore.client()
   
     def checkCredentials(self):
         creds = None
@@ -28,7 +37,7 @@ class JobEmailScraper:
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
-                flow = InstalledAppFlow.from_client_secrets_file("credentials.json", SCOPES)
+                flow = InstalledAppFlow.from_client_secrets_file("googleCredentials.json", SCOPES)
                 creds = flow.run_local_server(port=0)
 
             # Save the credentials for the next run
@@ -64,7 +73,6 @@ class JobEmailScraper:
 
             # request a list of all linkedin job alert messages 
             results = service.users().messages().list(maxResults=1, userId='me', labelIds=['CATEGORY_UPDATES'], q="from:jobalerts-noreply@linkedin.com").execute() 
-            
             messages = results.get('messages') # messages is a list of dictionaries where each dictionary contains a message id. 
         
             # iterate through all the messages 
@@ -104,12 +112,6 @@ class JobEmailScraper:
                     for row in jobTable.tr.find_next_siblings("tr"):
                         self._parseJob(row) 
 
-                    # Printing the job info 
-                    # print("Title: ", title) 
-                    # print("Company: ", company) 
-                    # print("Job Application URL: ", url) 
-                    # print('\n') 
-
                 except Exception as error: 
                     print("Error parsing", error)
 
@@ -130,14 +132,13 @@ class JobEmailScraper:
         jobCompany = reduceRow.tr.find_next_sibling("tr").p
         jobCompany, jobLocation = jobCompany.get_text().split("·")
 
-        print(jobTitle)
-        print(jobLink)
-        print(jobCompany)
-        print(jobLocation)
-        print()
+        self._storeJob(jobTitle, jobLink, jobCompany, jobLocation)
 
-        # self._writeToFile(jobPosition.prettify(), "jobPosition.html")
-        # self._writeToFile(jobCompany.prettify(), "jobCompany.html")
+    def _storeJob(self, title, link, company, location):
+        self.db.collection("users").add({"title": title, "link": link, "company": company, "location": location})
+
+    def _deleteEmails(self, id):
+        pass
 
     def _writeToFile(self, text, filename):
         # Writing to file
@@ -147,5 +148,5 @@ class JobEmailScraper:
 
 if __name__ == "__main__":
   jobScraper = JobEmailScraper()
-#   jobScraper.listLabels()
-  jobScraper.getEmails()
+  jobScraper.listLabels()
+#   jobScraper.getEmails()

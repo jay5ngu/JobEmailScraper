@@ -1,5 +1,6 @@
 # Jayson's Files
-credentials.json
+googleCredentials.json
+firestoreCredentials.json
 token.json
 emailHTML
 
