@@ -61,19 +61,19 @@ class JobEmailScraper:
             
             print("Labels:")
             for label in labels:
-                print(label["name"])
+                print(label["name"], label["id"])
 
         except HttpError as error:
             # TODO(developer) - Handle errors from gmail API.
             print(f"An error occurred: {error}")
 
-    def parseEmails(self):
+    def parseEmails(self, delete):
         """Parse all the linkedin job alert emails"""
         try:
             service = build("gmail", "v1", credentials=self.credentials)
 
             # request a list of all linkedin job alert messages 
-            results = service.users().messages().list(maxResults=1, userId='me', labelIds=['CATEGORY_UPDATES'], q="from:jobalerts-noreply@linkedin.com").execute() 
+            results = service.users().messages().list(userId='me', labelIds=['CATEGORY_UPDATES'], q="from:jobalerts-noreply@linkedin.com").execute() # maxResults=5,
             messages = results.get('messages') # messages is a list of dictionaries where each dictionary contains a message id. 
         
             # iterate through all the messages 
@@ -98,6 +98,7 @@ class JobEmailScraper:
 
                     # table with five rows (third row contains job listings)
                     jobTable = soup.body.table.tbody.tr.find_next_sibling("tr")
+                    # self._writeToFile(jobTable.prettify(), "regularEmail.html")
 
                     # get all five rows from table
                     jobTable = jobTable.tr.find_next_siblings("tr")
@@ -113,14 +114,73 @@ class JobEmailScraper:
                     for row in jobTable.tr.find_next_siblings("tr"):
                         self._parseJob(row) 
 
-                    # delete email once it is finished
-                    self._deleteEmails(service, msg["id"])
+                    # delete email once it is finished and user approves deletion
+                    if delete:
+                        self._deleteEmails(service, msg["id"])
 
                 except Exception as error: 
-                    print("Error parsing", error)
+                    print(f"Error when parsing {msg["id"]}: {error}")
+
+                    # tag emails with an error label
+                    body = {"removeLabelIds": [], "addLabelIds": ["Label_2311042616538796578"]}  # Format: {A list IDs of labels to remove from this message, A list of IDs of labels to add to this message.}
+                    service.users().messages().modify(userId="me", id=msg["id"], body=body).execute()
 
         except HttpError as error:
-            print(f"An error occurred: {error}") 
+            print(f"An Https error occurred: {error}") 
+
+    def parseErrorEmails(self, delete):
+        """Parse all the error linkedin job alert emails"""
+        try:
+            service = build("gmail", "v1", credentials=self.credentials)
+
+            # request a list of all linkedin job alert messages 
+            results = service.users().messages().list(userId='me', labelIds=['Label_2311042616538796578'], q="from:jobalerts-noreply@linkedin.com").execute() #  maxResults=1, 
+            messages = results.get('messages') # messages is a list of dictionaries where each dictionary contains a message id. 
+        
+            # iterate through all the messages 
+            for msg in messages: 
+                # Get the message from its id and returns dict object
+                txt = service.users().messages().get(userId='me', id=msg['id']).execute() 
+                jobStored = False
+
+                # Use try-except to avoid any Errors 
+                try: 
+                    # Get value of 'payload' from dictionary 'txt' 
+                    payload = txt['payload'] 
+        
+                    # The Body of the message is in Encrypted format. So, we have to decode it. 
+                    # Get the data and decode it with base 64 decoder. Decode to HTML
+                    parts = payload.get('parts')[1] 
+                    data = parts['body']['data'] 
+                    data = data.replace("-","+").replace("_","/") 
+                    decoded_data = base64.b64decode(data).decode('utf-8')   
+
+                    # Now, the data obtained is in html. So, we will parse it with BeautifulSoup library 
+                    soup = BeautifulSoup(decoded_data , features="html.parser") 
+
+                    # table with five rows (third row contains job listings)
+                    jobTable = soup.body.table.tbody.tr.find_next_sibling("tr")
+
+                    # get all rows from inner table
+                    self._writeToFile(jobTable.prettify(), "testEmail.html")
+                    jobTable = jobTable.tr.find_next_sibling("tr").find_next_siblings("tr")
+
+                    # iterate through table until no more jobs left              
+                    for row in jobTable :
+                        stored = self._parseJob(row)
+                        if stored:
+                            jobStored = True
+
+                # Error usually means there's no more jobs located in email
+                except Exception as error:
+                    # delete email once it is finished and user approves deletion
+                    if delete and jobStored:
+                        self._deleteEmails(service, msg["id"])
+                    else:
+                        print(f"Error when parsing Message {msg["id"]}: {error}")
+
+        except HttpError as error:
+            print(f"An Https error occurred: {error}") 
 
     def _parseJob(self, row):
         """Parse the individual job in email"""
@@ -136,9 +196,21 @@ class JobEmailScraper:
         # get company name and location
         jobCompany = reduceRow.tr.find_next_sibling("tr").p
         jobCompany, jobLocation = jobCompany.get_text().split("·")
+        
+        # print data of job info
+        # self._printJob(jobTitle, jobLink, jobCompany, jobLocation)
 
         # store data to firestore database
         self._storeJob(jobTitle, jobLink, jobCompany, jobLocation)
+
+        return True
+
+    def _printJob(self, title, link, company, location):
+        print(title)
+        print(link)
+        print(company)
+        print(location)
+        print()
 
     def _storeJob(self, title, link, company, location):
         """Save job information to firestore"""
@@ -154,10 +226,10 @@ class JobEmailScraper:
         """Delete email from Gmail inbox"""
         trashed = service.users().messages().trash(userId="me", id=id).execute()
         if trashed:
-            print("Deleted")
+            print(f"Email {id} has been deleted")
 
     def _writeToFile(self, text, filename):
-        """Developer function to see what data looks like"""
+        """Developer function to see what data looks like in HTML format"""
         # Writing to file
         with open(filename, "w", encoding="utf-8") as file:
             file.write(text)
@@ -165,4 +237,6 @@ class JobEmailScraper:
 
 if __name__ == "__main__":
   jobScraper = JobEmailScraper()
-  jobScraper.parseEmails()
+  jobScraper.listLabels()
+  jobScraper.parseEmails(False)
+  jobScraper.parseErrorEmails(False)
