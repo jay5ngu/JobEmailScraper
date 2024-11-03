@@ -3,6 +3,7 @@ googleCredentials.json
 firestoreCredentials.json
 token.json
 emailHTML
+node_modules
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
