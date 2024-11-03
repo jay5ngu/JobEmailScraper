@@ -75,7 +75,6 @@ class JobEmailScraper:
             # request a list of all linkedin job alert messages 
             results = service.users().messages().list(userId='me', labelIds=['CATEGORY_UPDATES'], q="from:jobalerts-noreply@linkedin.com").execute() # maxResults=5,
             messages = results.get('messages') # messages is a list of dictionaries where each dictionary contains a message id. 
-        
             # iterate through all the messages 
             for msg in messages: 
                 # Get the message from its id and returns dict object
@@ -119,7 +118,7 @@ class JobEmailScraper:
                         self._deleteEmails(service, msg["id"])
 
                 except Exception as error: 
-                    print(f"Error when parsing {msg["id"]}: {error}")
+                    print(f"Error when parsing {msg['id']}: {error}")
 
                     # tag emails with an error label
                     body = {"removeLabelIds": [], "addLabelIds": ["Label_2311042616538796578"]}  # Format: {A list IDs of labels to remove from this message, A list of IDs of labels to add to this message.}
@@ -177,33 +176,38 @@ class JobEmailScraper:
                     if delete and jobStored:
                         self._deleteEmails(service, msg["id"])
                     else:
-                        print(f"Error when parsing Message {msg["id"]}: {error}")
+                        print(f"Error when parsing Message {msg['id']}: {error}")
 
         except HttpError as error:
             print(f"An Https error occurred: {error}") 
 
     def _parseJob(self, row):
         """Parse the individual job in email"""
-        # traverse down the tree
-        reduceRow = row.table.table.table.tbody.table.tbody
+        try:
+            # traverse down the tree
+            reduceRow = row.table.table.table.tbody.table.tbody
 
-        # get tag containing job title and job application link
-        jobPosition = reduceRow.tr.a
-        jobTitle = jobPosition.get_text()
-        jobLink = jobPosition.get("href")
-        jobLink = jobLink[:jobLink.find("?")]
+            # get tag containing job title and job application link
+            jobPosition = reduceRow.tr.a
+            jobTitle = jobPosition.get_text()
+            jobLink = jobPosition.get("href")
+            jobLink = jobLink[:jobLink.find("?")]
 
-        # get company name and location
-        jobCompany = reduceRow.tr.find_next_sibling("tr").p
-        jobCompany, jobLocation = jobCompany.get_text().split("·")
+            # get company name and location
+            jobCompany = reduceRow.tr.find_next_sibling("tr").p
+            jobCompany, jobLocation = jobCompany.get_text().split("·")
+            
+            # print data of job info
+            # self._printJob(jobTitle, jobLink, jobCompany, jobLocation)
+
+            # store data to firestore database
+            self._storeJob(jobTitle, jobLink, jobCompany, jobLocation)
+
+            return True
         
-        # print data of job info
-        # self._printJob(jobTitle, jobLink, jobCompany, jobLocation)
-
-        # store data to firestore database
-        self._storeJob(jobTitle, jobLink, jobCompany, jobLocation)
-
-        return True
+        except Exception as error:
+            print(f"Error occur when trying to parse job: {error}")
+            return False
 
     def _printJob(self, title, link, company, location):
         print(title)
@@ -238,5 +242,5 @@ class JobEmailScraper:
 if __name__ == "__main__":
   jobScraper = JobEmailScraper()
   jobScraper.listLabels()
-  jobScraper.parseEmails(False)
-  jobScraper.parseErrorEmails(False)
+#   jobScraper.parseEmails(False)
+#   jobScraper.parseErrorEmails(False)
