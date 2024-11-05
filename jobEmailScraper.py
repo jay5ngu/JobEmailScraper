@@ -35,11 +35,12 @@ class JobEmailScraper:
 
         # If there are no (valid) credentials available, let the user log in.
         if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            else:
-                flow = InstalledAppFlow.from_client_secrets_file("googleCredentials.json", SCOPES)
-                creds = flow.run_local_server(port=0)
+            # if creds and creds.expired and creds.refresh_token:
+            #     creds.refresh(Request())
+            # else:
+
+            flow = InstalledAppFlow.from_client_secrets_file("googleCredentials.json", SCOPES)
+            creds = flow.run_local_server(port=0)
 
             # Save the credentials for the next run
             with open("token.json", "w") as token:
@@ -238,9 +239,21 @@ class JobEmailScraper:
         with open(filename, "w", encoding="utf-8") as file:
             file.write(text)
 
+    def listCompanies(self):
+        results = self.db.collection("users").stream()
+
+        for result in results:
+            print(f"{result.id} => {result.to_dict()}")
+
 
 if __name__ == "__main__":
   jobScraper = JobEmailScraper()
-  jobScraper.listLabels()
+
+  # Gmail API tests
+#   jobScraper.listLabels()
 #   jobScraper.parseEmails(False)
 #   jobScraper.parseErrorEmails(False)
+
+  # Firestore test
+  jobScraper.listCompanies()
+
