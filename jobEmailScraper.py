@@ -240,19 +240,31 @@ class JobEmailScraper:
             file.write(text)
 
     def listCompanies(self):
-        results = self.db.collection("users").stream()
+        """Debate if I should create another data table of company names that acts like a foreign key"""
+        """Or I make the table simpler and just put it in as job links (no nested database)"""
 
-        for result in results:
-            print(f"{result.id} => {result.to_dict()}")
+        """Gets all jobs"""
+        # companies_ref = self.db.collection_group("jobs")
+        # companies = companies_ref.stream()
+        # for company in companies:
+        #     print(f"Company: {company.id}")
 
+        """Gets specific job from one company """
+        # doc_ref = self.db.collection("Job Email Scraper").document("Test Company").collection("jobs")
+        # docs = doc_ref.get()
+        # for doc in docs:
+        #     print(doc.to_dict())
+
+        """ADD IN SAMPLE DATA"""
+        # self.db.collection("Job Email Scraper").document("Test Company 2").collection("jobs").document("https:__www.google.com_2").set({"title": "Software Engineer", "link": "https:__www.google.com_2", "company": "Test Company 2", "location": "San Francisco"})
 
 if __name__ == "__main__":
   jobScraper = JobEmailScraper()
 
   # Gmail API tests
-#   jobScraper.listLabels()
-#   jobScraper.parseEmails(False)
-#   jobScraper.parseErrorEmails(False)
+  jobScraper.listLabels()
+  jobScraper.parseEmails(False)
+  jobScraper.parseErrorEmails(False)
 
   # Firestore test
   jobScraper.listCompanies()
