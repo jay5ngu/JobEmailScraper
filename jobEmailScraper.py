@@ -35,16 +35,16 @@ class JobEmailScraper:
 
         # If there are no (valid) credentials available, let the user log in.
         if not creds or not creds.valid:
-            # if creds and creds.expired and creds.refresh_token:
-            #     creds.refresh(Request())
-            # else:
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            else:
 
-            flow = InstalledAppFlow.from_client_secrets_file("googleCredentials.json", SCOPES)
-            creds = flow.run_local_server(port=0)
+                flow = InstalledAppFlow.from_client_secrets_file("googleCredentials.json", SCOPES)
+                creds = flow.run_local_server(port=0)
 
-            # Save the credentials for the next run
-            with open("token.json", "w") as token:
-                token.write(creds.to_json())
+                # Save the credentials for the next run
+                with open("token.json", "w") as token:
+                    token.write(creds.to_json())
             
         return creds
 
@@ -108,7 +108,10 @@ class JobEmailScraper:
                     # self._writeToFile(jobTable.table.prettify(), "jobRows.html")
 
                     # process first job
-                    self._parseJob(jobTable.tr)
+                    parsed = self._parseJob(jobTable.tr)
+
+                    if not parsed:
+                        raise Exception
 
                     # with that first job processed, can grab the rest of the row siblings
                     for row in jobTable.tr.find_next_siblings("tr"):
@@ -162,7 +165,7 @@ class JobEmailScraper:
                     jobTable = soup.body.table.tbody.tr.find_next_sibling("tr")
 
                     # get all rows from inner table
-                    self._writeToFile(jobTable.prettify(), "testEmail.html")
+                    # self._writeToFile(jobTable.prettify(), "testEmail.html")
                     jobTable = jobTable.tr.find_next_sibling("tr").find_next_siblings("tr")
 
                     # iterate through table until no more jobs left              
@@ -199,10 +202,10 @@ class JobEmailScraper:
             jobCompany, jobLocation = jobCompany.get_text().split("·")
             
             # print data of job info
-            # self._printJob(jobTitle, jobLink, jobCompany, jobLocation)
+            self._printJob(jobTitle, jobLink, jobCompany, jobLocation)
 
             # store data to firestore database
-            self._storeJob(jobTitle, jobLink, jobCompany, jobLocation)
+            self._storeJob(jobTitle.strip(), jobLink.strip(), jobCompany.strip(), jobLocation.strip())
 
             return True
         
@@ -222,6 +225,9 @@ class JobEmailScraper:
         # sends job to firestore database (Users/Company/Jobs)
         self.db.collection("users").document(company).collection("jobs").document(link.replace("/","_")).set({"title": title, "link": link, "company": company, "location": location})
         
+        # creates foreign key to be able to access firestore database (Company Names)
+        self.db.collection("Company Name").document(company).set({})
+
         # Other iterations to store data
         # self.db.collection("users").document(company).set({"title": title, "link": link, "company": company, "location": location})
         # self.db.collection("users").document(link.replace("/", "_")).set({"title": title, "link": link, "company": company, "location": location})
@@ -243,17 +249,19 @@ class JobEmailScraper:
         """Debate if I should create another data table of company names that acts like a foreign key"""
         """Or I make the table simpler and just put it in as job links (no nested database)"""
 
-        """Gets all jobs"""
-        # companies_ref = self.db.collection_group("jobs")
-        # companies = companies_ref.stream()
-        # for company in companies:
-        #     print(f"Company: {company.id}")
+        """Gets all company names and add to firestore"""
+        companies_ref = self.db.collection_group("jobs")
+        companies = companies_ref.stream()
+        for company in companies:
+            print(company.id)
+            name = company.get('company')
+            print(company.to_dict())
 
         """Gets specific job from one company """
-        # doc_ref = self.db.collection("Job Email Scraper").document("Test Company").collection("jobs")
-        # docs = doc_ref.get()
-        # for doc in docs:
-        #     print(doc.to_dict())
+        doc_ref = self.db.collection("users").document(" AVEVA ").collection("jobs")
+        docs = doc_ref.get()
+        for doc in docs:
+            print(doc.to_dict())
 
         """ADD IN SAMPLE DATA"""
         # self.db.collection("Job Email Scraper").document("Test Company 2").collection("jobs").document("https:__www.google.com_2").set({"title": "Software Engineer", "link": "https:__www.google.com_2", "company": "Test Company 2", "location": "San Francisco"})
@@ -262,10 +270,10 @@ if __name__ == "__main__":
   jobScraper = JobEmailScraper()
 
   # Gmail API tests
-  jobScraper.listLabels()
-  jobScraper.parseEmails(False)
-  jobScraper.parseErrorEmails(False)
+#   jobScraper.listLabels()
+#   jobScraper.parseEmails(False)
+#   jobScraper.parseErrorEmails(False)
 
   # Firestore test
-  jobScraper.listCompanies()
+#   jobScraper.listCompanies()
 
