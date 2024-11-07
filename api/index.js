@@ -27,44 +27,39 @@ initializeApp({
 const db = getFirestore();
 
 // Get list of all existing collections in database as well as their data
-async function listCollections() 
+async function listCompanyNames(req, res) 
 {
-  const usersCollection = db.collection('users');
-  const results = await usersCollection.get();
+  try {
+      // Access Firestore collection and document
+    const results = await db.collectionGroup('Company Name').get();
 
-  // Extract document IDs, which are the company names
-  const companyNames = results.docs.map(doc => doc.id);
+    // Confirm that we received results from Firestore database
+    if (results.empty) {
+      // Respond with 404 if no document found
+      return res.status(404).send(`No jobs found for company: ${company}`);
+    }
 
-  console.log("Company Names:", companyNames);
-}
-
-// Test function to add sample data points
-async function addJobs(company, title, link, location) {
-  const usersCollection = db.collection('users');
-
-  // Replace '/' with '_' in link to match your Python code logic
-  const sanitizedLink = link.replace(/\//g, "_");
-
-  await db.collection("users")
-    .doc(company)                     // Company as document ID in 'users' collection
-    .collection("jobs")
-    .doc(sanitizedLink)               // Sanitized link as document ID in 'jobs' subcollection
-    .set({
-      title: title,
-      link: link,
-      company: company,
-      location: location
+    // Parse all company names into list type storage
+    const companyNames = []
+    results.forEach((name) => {
+      companyNames.push(name.id);
     });
 
-  console.log('Data added to Firestore successfully.');
-  
+    // Respond with document data as JSON
+    return res.status(200).json(companyNames);
+
+  } catch (error) {
+    // Handle any errors in Firestore access
+    console.error('Error accessing Firestore:', error);
+    res.status(500).send('Internal Server Error');
+  }
 }
 
-async function deleteJobs() {
-  const result = await db.collection('users').doc('AAAAAAAA').delete();
+async function allJobs(req, res) {
+  // TODO: get all jobs and their info
 }
 
-async function accessJobs(req, res) {
+async function getJob(req, res) {
   const company = req.query.company;
 
   if (!company) {
@@ -74,16 +69,23 @@ async function accessJobs(req, res) {
 
   try {
     // Access Firestore collection and document
-    const companyRef = db.collection('users').doc(company);
-    const doc = await companyRef.get();
+    const results = await db.collection('Job Listings').doc(company).collection('jobs').get();
 
-    if (!doc.exists) {
+    // Confirm that we received results from Firestore database
+    if (results.empty) {
       // Respond with 404 if no document found
-      return res.status(404).send(`No document found for company: ${company}`);
+      return res.status(404).send(`No jobs found for company: ${company}`);
     }
 
+    // Parse all jobs into list type storage
+    const jobs = []
+    results.forEach(job => {
+      jobs.push(job.data());
+    });
+
     // Respond with document data as JSON
-    res.json({ message: 'Document data found', data: doc.data() });
+    return res.status(200).json({ company, jobs });
+
   } catch (error) {
     // Handle any errors in Firestore access
     console.error('Error accessing Firestore:', error);
@@ -91,7 +93,70 @@ async function accessJobs(req, res) {
   }
 }
 
-app.get('/getJobs', accessJobs)
+// Test function to add sample data points
+async function addJob(req, res) {
+  const company = req.query.company;
+  const title = req.query.title
+  const link = req.query.link
+  const location = req.query.location
+
+  // Replace '/' with '_' in link to match your Python code logic
+  const sanitizedLink = link.replace(/\//g, "_");
+
+  try {
+    // Add job to Firestore Database
+    const jobListings = db.collection('Job Listings');
+    await jobListings.doc(company).collection("jobs").doc(sanitizedLink).set({
+      title: title,
+      link: link,
+      company: company,
+      location: location
+    });
+
+    const companyNames = db.collection('Company Name');
+    await companyNames.doc(company).set({});
+    
+    // Respond with document data as JSON
+    return res.status(200).send("Data added successfully!");
+
+  } catch (error) {
+    // Handle any errors in Firestore access
+    console.error('Error accessing Firestore:', error);
+    res.status(500).send('Internal Server Error');
+  }
+  
+}
+
+async function deleteJob(req, res) {
+  company = req.query.company;
+  link = req.query.link;
+
+  if (!company || !link) {
+    return res.status(400).send('Missing query parameter');
+  }
+
+  try {
+    await db.collection('Job Listings').doc(company).collection('jobs').doc(link).delete();
+
+    return res.status(200).send("Data deleted successfully!");
+
+  } catch (error) {
+    // Handle any errors in Firestore access
+    console.error('Error accessing Firestore:', error);
+    res.status(500).send('Internal Server Error');
+  }
+}
+
+
+app.get('/listCompanies', listCompanyNames)
+
+app.get('/allJobs', allJobs)
+
+app.get('/getJob', getJob)
+
+app.post('/addJob', addJob)
+
+app.post('/deleteJob', deleteJob)
 
 app.get('/', (req, res) => {
   res.send('Hello World!')
@@ -103,4 +168,4 @@ app.listen(port, () => {
 
 // addJobs('Test Company', 'Software Engineer','https://www.google.com/','San Francisco');
 // deleteJobs();
-// listCollections();
+// listCompanyNames();

@@ -223,7 +223,7 @@ class JobEmailScraper:
     def _storeJob(self, title, link, company, location):
         """Save job information to firestore"""
         # sends job to firestore database (Users/Company/Jobs)
-        self.db.collection("users").document(company).collection("jobs").document(link.replace("/","_")).set({"title": title, "link": link, "company": company, "location": location})
+        self.db.collection("Job Listings").document(company).collection("jobs").document(link.replace("/","_")).set({"title": title, "link": link, "company": company, "location": location})
         
         # creates foreign key to be able to access firestore database (Company Names)
         self.db.collection("Company Name").document(company).set({})
@@ -245,26 +245,53 @@ class JobEmailScraper:
         with open(filename, "w", encoding="utf-8") as file:
             file.write(text)
 
-    def listCompanies(self):
+    def testFirestore(self):
         """Debate if I should create another data table of company names that acts like a foreign key"""
         """Or I make the table simpler and just put it in as job links (no nested database)"""
 
-        """Gets all company names and add to firestore"""
-        companies_ref = self.db.collection_group("jobs")
-        companies = companies_ref.stream()
-        for company in companies:
-            print(company.id)
-            name = company.get('company')
-            print(company.to_dict())
+        """Gets all jobs and thier info from firestore"""
+        # jobs_ref = self.db.collection_group("jobs")
+        # jobs = jobs_ref.stream()
+        # for job in jobs:
+        #     # print(job.id)
+        #     # name = job.get('company')
+        #     print(job.to_dict())
 
         """Gets specific job from one company """
-        doc_ref = self.db.collection("users").document(" AVEVA ").collection("jobs")
-        docs = doc_ref.get()
-        for doc in docs:
-            print(doc.to_dict())
+        # doc_ref = self.db.collection("Job Listings").document("dice").collection("jobs")
+        # docs = doc_ref.get()
+        # for doc in docs:
+        #     print(doc.to_dict())
 
         """ADD IN SAMPLE DATA"""
         # self.db.collection("Job Email Scraper").document("Test Company 2").collection("jobs").document("https:__www.google.com_2").set({"title": "Software Engineer", "link": "https:__www.google.com_2", "company": "Test Company 2", "location": "San Francisco"})
+
+        """DELETE SAMPLE DATA"""
+        # self.db.collection("Job Email Scraper").document("Test Company 2").delete()
+
+    def stripSpaceFirestore(self):
+        # get all jobs
+        jobs_ref = self.db.collection_group("jobs")
+        jobs = jobs_ref.stream()
+        for job in jobs:
+            info = job.to_dict()
+
+            # Delete Old Data
+            self.db.collection("Company Name").document(info["company"]).delete()
+
+            # Add in Stripped Data
+            company = info["company"].strip().lower()
+            title = info["title"].strip()
+            link = info["link"].strip()
+            location = info["location"].strip()
+
+            # sends job to firestore database (Users/Company/Jobs)
+            self.db.collection("Job Listings").document(company).collection("jobs").document(link.replace("/","_")).set({"title": title, "link": link, "company": company, "location": location})
+            
+            # creates foreign key to be able to access firestore database (Company Names)
+            self.db.collection("Company Name").document(company).set({})
+
+            print("New Data Added\n")
 
 if __name__ == "__main__":
   jobScraper = JobEmailScraper()
@@ -275,5 +302,6 @@ if __name__ == "__main__":
 #   jobScraper.parseErrorEmails(False)
 
   # Firestore test
-#   jobScraper.listCompanies()
+#   jobScraper.testFirestore()
+#   jobScraper.strispSpaceFirestore()
 
